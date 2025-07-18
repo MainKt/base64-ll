@@ -54,7 +54,7 @@ error:
   ret i8 -1
 }
 
-define i64 @decode(ptr %buf, i64 %size, ptr %out) {
+define i64 @decode(ptr %buf, i64 %size) {
 entry:
   %chunk = load <4 x i8>, ptr %buf
 
@@ -76,21 +76,21 @@ err.bad.char:
 cast.sextet:
   %s = trunc i8 %s.i8 to i6
 
-  %out.vec = load <4 x i6>, ptr %out
+  %out.vec = load <4 x i6>, ptr %buf
   %new.out.vec = insertelement <4 x i6> %out.vec, i6 %s, i64 %i
-  store <4 x i6> %new.out.vec, ptr %out
+  store <4 x i6> %new.out.vec, ptr %buf
 
   %i.next = add i64 %i, 1
   %is.end = icmp eq i64 %i.next, %size
   br i1 %is.end, label %end, label %loop
 
 end:
-  %v.4xi6 = load <4 x i6>, ptr %out
+  %v.4xi6 = load <4 x i6>, ptr %buf
   %v.4xi6.reversed = call <4 x i6> @llvm.vector.reverse.v4i6 (<4 x i6> %v.4xi6)
 
   %v.reversed = bitcast <4 x i6> %v.4xi6.reversed to <3 x i8>
   %v = call <3 x i8> @llvm.vector.reverse.v3i8 (<3 x i8> %v.reversed)
-  store <3 x i8> %v, ptr %out
+  store <3 x i8> %v, ptr %buf
 
   %div = udiv i64 %size, 4
   %exact = mul i64 %div, 3
@@ -126,7 +126,6 @@ end:
 define i32 @main() {
 entry:
   %buf = alloca <4 x i8>
-  %out = alloca <4 x i6>
   %size = add i64 0, 4
   br label %read.stdin
 
@@ -137,9 +136,9 @@ read.stdin:
 
 write.stdout:
   %non.padded.len = call i64 @unpadded.len(ptr %buf, i64 %n)
-  %decoded.len = call i64 @decode(ptr %buf, i64 %non.padded.len, ptr %out)
+  %decoded.len = call i64 @decode(ptr %buf, i64 %non.padded.len, ptr %buf)
 
-  %written = call i64 @write(i32 1, ptr %out, i64 %decoded.len)
+  %written = call i64 @write(i32 1, ptr %buf, i64 %decoded.len)
   %write.fail = icmp ne i64 %written, %decoded.len
   br i1 %write.fail, label %write.error, label %read.stdin
 
