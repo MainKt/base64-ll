@@ -43,24 +43,47 @@ end:
   ret i64 %sextets
 }
 
+define void @pad.if.necessary(ptr %code, i64 %code.size) {
+entry:
+  br label %check.pad
+check.pad:
+  %len = phi i64 [%code.size, %entry], [%len.next, %pad]
+  %is.four = icmp eq i64 %len, 4
+  br i1 %is.four, label %end, label %pad
+
+pad:
+  %last.elem = getelementptr i8, ptr %code, i64 %len
+  store i8 61, ptr %last.elem
+
+  %len.next = add i64 %len, 1
+  br label %check.pad
+
+end:
+  ret void
+}
+
 define i32 @main() {
 entry:
   %buf = alloca <3 x i8>
-  %out = alloca <4 x i8>
-  %size = add i64 0, 3
+  %buf.size = add i64 0, 3
+
+  %code = alloca <4 x i8>
+  %code.size = add i64 0, 4
+
   br label %read.stdin
 
 read.stdin:
   store <3 x i8> zeroinitializer, ptr %buf
-  %n = call i64 @read(i32 0, ptr %buf, i64 %size)
+  %n = call i64 @read(i32 0, ptr %buf, i64 %buf.size)
   %read.end = icmp sle i64 %n, 0
   br i1 %read.end, label %end, label %write.stdout
 
 write.stdout:
-  %encoded.len = call i64 @encode(ptr %buf, i64 %n, ptr %out)
+  %encoded.len = call i64 @encode(ptr %buf, i64 %n, ptr %code)
+  call void @pad.if.necessary(ptr %code, i64 %encoded.len)
 
-  %written = call i64 @write(i32 1, ptr %out, i64 %encoded.len)
-  %write.fail = icmp ne i64 %written, %encoded.len
+  %written = call i64 @write(i32 1, ptr %code, i64 %code.size)
+  %write.fail = icmp ne i64 %written, %code.size
   br i1 %write.fail, label %write.error, label %read.stdin
 
 write.error:
