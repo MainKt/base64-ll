@@ -20,7 +20,8 @@ entry:
   %chunk = call <4 x i6> @llvm.vector.reverse.v4i6 (<4 x i6> %chunk.reversed)
 
   %octets = mul i64 %size, 8
-  %sextets = udiv i64 %octets, 6
+  %octets.plus5 = add i64 %octets, 5; (1 + 5) / 6 == 1
+  %sextets = udiv i64 %octets.plus5, 6
 
   br label %loop
 
@@ -50,6 +51,7 @@ entry:
   br label %read.stdin
 
 read.stdin:
+  store <3 x i8> zeroinitializer, ptr %buf
   %n = call i64 @read(i32 0, ptr %buf, i64 %size)
   %read.end = icmp sle i64 %n, 0
   br i1 %read.end, label %end, label %write.stdout
