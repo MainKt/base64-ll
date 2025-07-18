@@ -136,7 +136,7 @@ read.stdin:
 
 write.stdout:
   %non.padded.len = call i64 @unpadded.len(ptr %buf, i64 %n)
-  %decoded.len = call i64 @decode(ptr %buf, i64 %non.padded.len, ptr %buf)
+  %decoded.len = call i64 @decode(ptr %buf, i64 %non.padded.len)
 
   %written = call i64 @write(i32 1, ptr %buf, i64 %decoded.len)
   %write.fail = icmp ne i64 %written, %decoded.len
