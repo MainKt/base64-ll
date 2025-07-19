@@ -91,6 +91,23 @@ end:
   ret i64 %unpadded.len
 }
 
+define i64 @remove.ending.newline(ptr %buf, i64 %size) {
+entry:
+  %last.i = sub i64 %size, 1
+  %last = getelementptr i8, ptr %buf, i64 %last.i
+  %last.val = load i8, ptr %last
+  %is.newline = icmp eq i8 %last.val, 10
+
+  br i1 %is.newline, label %remove.newline, label %no.change
+
+remove.newline:
+  store i8 65, ptr %last; 65 == 'A'
+  ret i64 %last.i
+  
+no.change:
+  ret i64 %size
+}
+
 define i32 @main() {
 entry:
   %buf = alloca <4 x i8>
@@ -104,7 +121,8 @@ read.stdin:
   br i1 %read.end, label %end, label %decode
 
 decode:
-  %non.padded.len = call i64 @unpadded.len(ptr %buf, i64 %n)
+  %n.0 = call i64 @remove.ending.newline(ptr %buf, i64 %n)
+  %non.padded.len = call i64 @unpadded.len(ptr %buf, i64 %n.0)
   %is.valid = call i1 @decode(ptr %buf, i64 %non.padded.len)
   br i1 %is.valid, label %write.stdout, label %err.bad.char
 
