@@ -37,7 +37,7 @@ entry:
   %sextets.i8 = add <4 x i8> %ascii, %offsets
   %sextets.reversed = trunc <4 x i8> %sextets.i8 to <4 x i6>
   %sextets = call
-    <4 x i6> @llvm.vector.reverse.v4i6 (<4 x i6> %sextets.reversed)
+    <4 x i6> @llvm.vector.reverse.v4i6(<4 x i6> %sextets.reversed)
 
   %sextets.bytes.reversed = bitcast <4 x i6> %sextets to <3 x i8>
   %sextets.bytes = call
@@ -66,29 +66,31 @@ entry:
   ret i1 %is.valid
 }
 
-define i64 @unpadded.len(ptr %buf, i64 %size) {
+define i64 @unpad(ptr %buf, i64 %size) {
 entry:
-  br label %loop
+  %is.bad.size = icmp eq i64 %size, 0
+  br i1 %is.bad.size, label %bad.size.end, label %check
 
-loop:
-  %unpadded.len = phi i64 [%size, %entry], [%last.i, %unpad]
-  %last.i = sub i64 %unpadded.len, 1
-  %is.oob = icmp slt i64 %last.i, 0
-  br i1 %is.oob, label %end, label %remove.end
+bad.size.end:
+  ret i64 0
 
-remove.end:
+check:
+  %i = phi i64 [1, %entry], [2, %unpad]
+  %new.size.0 = phi i64 [%size, %entry], [%last.i, %unpad]
+  %last.i = sub i64 %size, %i
   %last = getelementptr i8, ptr %buf, i64 %last.i
   %last.val = load i8, ptr %last
   %is.padding = icmp eq i8 %last.val, 61; int('=') == 61
-
   br i1 %is.padding, label %unpad, label %end
 
 unpad:
-  store i8 65, ptr %last 
-  br label %loop
+  store i8 65, ptr %last; int('A') == 65
+  %is.end = icmp eq i64 %i, 2
+  br i1 %is.end, label %end, label %check
 
 end:
-  ret i64 %unpadded.len
+  %new.size = phi i64 [%new.size.0, %check], [%last.i, %unpad]
+  ret i64 %new.size
 }
 
 define i64 @remove.ending.newline(ptr %buf, i64 %size) {
@@ -122,7 +124,7 @@ read.stdin:
 
 decode:
   %n.0 = call i64 @remove.ending.newline(ptr %buf, i64 %n)
-  %non.padded.len = call i64 @unpadded.len(ptr %buf, i64 %n.0)
+  %non.padded.len = call i64 @unpad(ptr %buf, i64 %n.0)
   %is.valid = call i1 @decode(ptr %buf, i64 %non.padded.len)
   br i1 %is.valid, label %write.stdout, label %err.bad.char
 
@@ -198,9 +200,7 @@ entry:
 declare i64 @read(i32, ptr, i64)
 declare i64 @write(i32, ptr, i64)
 declare void @errx(i32, ptr, ...)
-declare i32 @printf(ptr, ...)
 
-declare <4 x i6> @llvm.vector.reverse.v4i6 (<4 x i6>)
-declare <3 x i8> @llvm.vector.reverse.v3i8 (<3 x i8>)
-declare <16 x i8> @llvm.vector.reverse.v16i8 (<16 x i8>)
+declare <4 x i6> @llvm.vector.reverse.v4i6(<4 x i6>)
+declare <3 x i8> @llvm.vector.reverse.v3i8(<3 x i8>)
 declare i8 @llvm.vector.reduce.or.v4i8(<4 x i8>)
