@@ -4,6 +4,8 @@ target triple = "x86_64-unknown-freebsd15.0"
 @.read.error = constant [15 x i8] c"Unable to read\00"
 @.bad.char.error = constant [9 x i8] c"Bad char\00"
 
+%Result = type { <48 x i8>, i1 }
+
 define i64 @decoded.len(i64 %size) {
 entry:
   %div = udiv i64 %size, 4
@@ -16,10 +18,8 @@ entry:
   ret i64 %len
 }
 
-define i1 @decode(ptr %buf, i64 %size) {
+define %Result @decode.simd(<64 x i8> %ascii) {
 entry:
-  %ascii = load <64 x i8>, ptr %buf
-
   %fours = call <64 x i8> @splat(i8 4)
   %shifted = lshr <64 x i8> %ascii, %fours
 
@@ -45,7 +45,7 @@ entry:
   %sextets.bytes = call
     <48 x i8> @llvm.vector.reverse.v48i8(<48 x i8> %sextets.bytes.reversed)
 
-  store <48 x i8> %sextets.bytes, ptr %buf
+  %result.0 = insertvalue %Result undef, <48 x i8> %sextets.bytes, 0
 
   ; invalid chars check
   %lo.lut = add <16 x i8> zeroinitializer,
@@ -65,6 +65,20 @@ entry:
   %reduce.or = call i8 @llvm.vector.reduce.or.v64i8(<64 x i8> %lo.and.hi)
   %is.valid = icmp eq i8 %reduce.or, 0
 
+  %result = insertvalue %Result %result.0, i1 %is.valid, 1
+
+  ret %Result %result
+}
+
+define i1 @decode(ptr %buf, ptr %out) {
+entry:
+  %ascii = load <64 x i8>, ptr %buf
+  %result = call %Result @decode.simd(<64 x i8> %ascii)
+
+  %decoded = extractvalue %Result %result, 0
+  store <48 x i8> %decoded, ptr %out
+
+  %is.valid = extractvalue %Result %result, 1
   ret i1 %is.valid
 }
 
@@ -128,7 +142,7 @@ read.stdin:
 decode:
   %n.0 = call i64 @remove.ending.newline(ptr %buf, i64 %n)
   %non.padded.len = call i64 @unpad(ptr %buf, i64 %n.0)
-  %is.valid = call i1 @decode(ptr %buf, i64 %non.padded.len)
+  %is.valid = call i1 @decode(ptr %buf, ptr %buf)
   br i1 %is.valid, label %write.stdout, label %err.bad.char
 
 write.stdout:
