@@ -29,12 +29,9 @@ entry:
 
   %hashes = sub <16 x i8> %shifted, %eq
 
-  %offsets.look.up.0 = add <8 x i8> zeroinitializer,
-    <i8 -1, i8 16, i8 19, i8 4, i8 191, i8 191, i8 185, i8 185>
-  %offsets.look.up = shufflevector <8 x i8> %offsets.look.up.0,
-    <8 x i8> %offsets.look.up.0,
-    <16 x i32> <i32 0, i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7, i32 8,
-      i32 9, i32 10, i32 11, i32 12, i32 13, i32 14, i32 15>
+  %offsets.look.up = call <16 x i8> @tiled(
+    <8 x i8> <i8 -1, i8 16, i8 19, i8 4, i8 191, i8 191, i8 185, i8 185>
+  )
 
   %offsets =  call <16 x i8> @swizzle.16i8.16i8(<16 x i8> %offsets.look.up,
     <16 x i8> %hashes)
@@ -163,59 +160,32 @@ entry:
   ret <16 x i8> %s
 }
 
+define <16 x i8> @tiled(<8 x i8> %v) {
+entry:
+  %tiled = shufflevector <8 x i8> %v, <8 x i8> %v,
+    <16 x i32> <i32 0, i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7,
+      i32 8, i32 9, i32 10, i32 11, i32 12, i32 13, i32 14, i32 15>
+  ret <16 x i8> %tiled
+}
+
 define <16 x i8> @swizzle.16i8.16i8(<16 x i8> %look.up, <16 x i8> %v) {
 entry:
-  %v.0 =  extractelement <16 x i8> %v, i8 0
-  %v.1 =  extractelement <16 x i8> %v, i8 1
-  %v.2 =  extractelement <16 x i8> %v, i8 2
-  %v.3 =  extractelement <16 x i8> %v, i8 3
-  %v.4 =  extractelement <16 x i8> %v, i8 4
-  %v.5 =  extractelement <16 x i8> %v, i8 5
-  %v.6 =  extractelement <16 x i8> %v, i8 6
-  %v.7 =  extractelement <16 x i8> %v, i8 7
-  %v.8 =  extractelement <16 x i8> %v, i8 8
-  %v.9 =  extractelement <16 x i8> %v, i8 9
-  %v.10 = extractelement <16 x i8> %v, i8 10
-  %v.11 = extractelement <16 x i8> %v, i8 11
-  %v.12 = extractelement <16 x i8> %v, i8 12
-  %v.13 = extractelement <16 x i8> %v, i8 13
-  %v.14 = extractelement <16 x i8> %v, i8 14
-  %v.15 = extractelement <16 x i8> %v, i8 15
+  %size = add i64 0, 16
+  br label %loop
 
-  %look.up.0 =  extractelement <16 x i8> %look.up, i8 %v.0
-  %look.up.1 =  extractelement <16 x i8> %look.up, i8 %v.1
-  %look.up.2 =  extractelement <16 x i8> %look.up, i8 %v.2
-  %look.up.3 =  extractelement <16 x i8> %look.up, i8 %v.3
-  %look.up.4 =  extractelement <16 x i8> %look.up, i8 %v.4
-  %look.up.5 =  extractelement <16 x i8> %look.up, i8 %v.5
-  %look.up.6 =  extractelement <16 x i8> %look.up, i8 %v.6
-  %look.up.7 =  extractelement <16 x i8> %look.up, i8 %v.7
-  %look.up.8 =  extractelement <16 x i8> %look.up, i8 %v.8
-  %look.up.9 =  extractelement <16 x i8> %look.up, i8 %v.9
-  %look.up.10 = extractelement <16 x i8> %look.up, i8 %v.10
-  %look.up.11 = extractelement <16 x i8> %look.up, i8 %v.11
-  %look.up.12 = extractelement <16 x i8> %look.up, i8 %v.12
-  %look.up.13 = extractelement <16 x i8> %look.up, i8 %v.13
-  %look.up.14 = extractelement <16 x i8> %look.up, i8 %v.14
-  %look.up.15 = extractelement <16 x i8> %look.up, i8 %v.15
+loop:
+  %i = phi i64 [0, %entry], [%i.next, %loop]
+  %values.old = phi <16 x i8> [undef, %entry], [%values, %loop]
 
-  %values.0 =  insertelement <16 x i8> undef, i8 %look.up.0, i32 0
-  %values.1 =  insertelement <16 x i8> %values.0, i8 %look.up.1, i32 1
-  %values.2 =  insertelement <16 x i8> %values.1, i8 %look.up.2, i32 2
-  %values.3 =  insertelement <16 x i8> %values.2, i8 %look.up.3, i32 3
-  %values.4 =  insertelement <16 x i8> %values.3, i8 %look.up.4, i32 4
-  %values.5 =  insertelement <16 x i8> %values.4, i8 %look.up.5, i32 5
-  %values.6 =  insertelement <16 x i8> %values.5, i8 %look.up.6, i32 6
-  %values.7 =  insertelement <16 x i8> %values.6, i8 %look.up.7, i32 7
-  %values.8 =  insertelement <16 x i8> %values.7, i8 %look.up.8, i32 8
-  %values.9 =  insertelement <16 x i8> %values.8, i8 %look.up.9, i32 9
-  %values.10 = insertelement <16 x i8> %values.9, i8 %look.up.10, i32 10
-  %values.11 = insertelement <16 x i8> %values.10, i8 %look.up.11, i32 11
-  %values.12 = insertelement <16 x i8> %values.11, i8 %look.up.12, i32 12
-  %values.13 = insertelement <16 x i8> %values.12, i8 %look.up.13, i32 13
-  %values.14 = insertelement <16 x i8> %values.13, i8 %look.up.14, i32 14
-  %values = insertelement <16 x i8> %values.14, i8 %look.up.15, i32 15
+  %v.i =  extractelement <16 x i8> %v, i64 %i
+  %look.up.i =  extractelement <16 x i8> %look.up, i8 %v.i
+  %values =  insertelement <16 x i8> %values.old, i8 %look.up.i, i64 %i
 
+  %i.next = add i64 %i, 1
+  %is.end = icmp eq i64 %i, %size
+  br i1 %is.end, label %end, label %loop
+
+end:
   ret <16 x i8> %values
 }
 
