@@ -4,94 +4,8 @@ target triple = "x86_64-unknown-freebsd15.0"
 @.read.error = constant [15 x i8] c"Unable to read\00"
 @.bad.char.error = constant [9 x i8] c"Bad char\00"
 
-define i8 @sextet(i8 %byte) {
-upper.check:
-  %is.upper.0 = icmp uge i8 %byte, 65; 'A'
-  %is.upper.1 = icmp ule i8 %byte, 90; 'Z'
-  %is.upper = and i1 %is.upper.0, %is.upper.1
-  br i1 %is.upper, label %upper, label %lower.check
-
-upper:
-  %upper.ret = sub i8 %byte, 65
-  ret i8 %upper.ret
-
-lower.check:
-  %is.lower.0 = icmp uge i8 %byte, 97; 'a'
-  %is.lower.1 = icmp ule i8 %byte, 122; 'z'
-  %is.lower = and i1 %is.lower.0, %is.lower.1
-  br i1 %is.lower , label %lower, label %num.check
-
-lower:
-  %lower.ret.i8.0 = sub i8 %byte, 97
-  %lower.ret = add i8 %lower.ret.i8.0, 26
-  ret i8 %lower.ret
-
-num.check:
-  %is.num.0 = icmp uge i8 %byte, 48; '0'
-  %is.num.1 = icmp ule i8 %byte, 57; '9'
-  %is.num = and i1 %is.num.0, %is.num.1
-  br i1 %is.num, label %num, label %plus.check
-
-num:
-  %num.ret.i8.0 = sub i8 %byte, 48
-  %num.ret = add i8 %num.ret.i8.0, 52
-  ret i8 %num.ret
-
-plus.check:
-  %is.plus = icmp eq i8 %byte, 43; '+'
-  br i1 %is.plus, label %plus, label %slash.check
-
-plus:
-  ret i8 62; '+'
-
-slash.check:
-  %is.slash = icmp eq i8 %byte, 47; '/'
-  br i1 %is.slash, label %slash, label %error
-
-slash:
-  ret i8 63; '/'
-error:
-  ret i8 -1
-}
-
-define i64 @decode(ptr %buf, i64 %size) {
+define i64 @decoded.len(i64 %size) {
 entry:
-  %chunk = load <4 x i8>, ptr %buf
-
-  br label %loop
-
-loop:
-  %i = phi i64 [0, %entry], [%i.next, %cast.sextet]
-
-  %b = extractelement <4 x i8> %chunk, i64 %i
-  %s.i8 = call i8 @sextet(i8 %b)
-  %is.bad.char = icmp eq i8 %s.i8, -1
-
-  br i1 %is.bad.char, label %err.bad.char, label %cast.sextet
-
-err.bad.char:
-  call void @errx(i32 1, ptr @.bad.char.error)
-  unreachable
-
-cast.sextet:
-  %s = trunc i8 %s.i8 to i6
-
-  %out.vec = load <4 x i6>, ptr %buf
-  %new.out.vec = insertelement <4 x i6> %out.vec, i6 %s, i64 %i
-  store <4 x i6> %new.out.vec, ptr %buf
-
-  %i.next = add i64 %i, 1
-  %is.end = icmp eq i64 %i.next, %size
-  br i1 %is.end, label %end, label %loop
-
-end:
-  %v.4xi6 = load <4 x i6>, ptr %buf
-  %v.4xi6.reversed = call <4 x i6> @llvm.vector.reverse.v4i6 (<4 x i6> %v.4xi6)
-
-  %v.reversed = bitcast <4 x i6> %v.4xi6.reversed to <3 x i8>
-  %v = call <3 x i8> @llvm.vector.reverse.v3i8 (<3 x i8> %v.reversed)
-  store <3 x i8> %v, ptr %buf
-
   %div = udiv i64 %size, 4
   %exact = mul i64 %div, 3
   %rem = urem i64 %size, 4
@@ -102,12 +16,62 @@ end:
   ret i64 %len
 }
 
+define i1 @decode(ptr %buf, i64 %size) {
+entry:
+  %ascii = load <4 x i8>, ptr %buf
+
+  %fours = call <4 x i8> @splat(i8 4)
+  %shifted = lshr <4 x i8> %ascii, %fours
+
+  %slashes = call <4 x i8> @splat(i8 47); ord('/') == 47
+  %eq.i1 = icmp eq <4 x i8> %ascii, %slashes
+  %eq = zext <4 x i1> %eq.i1 to <4 x i8>
+
+  %hashes = sub <4 x i8> %shifted, %eq
+
+  %offsets.look.up = add <8 x i8> zeroinitializer,
+    <i8 -1, i8 16, i8 19, i8 4, i8 191, i8 191, i8 185, i8 185>
+  %offsets =  call <4 x i8> @swizzle.4i8.8i8(<8 x i8> %offsets.look.up,
+    <4 x i8> %hashes)
+
+  %sextets.i8 = add <4 x i8> %ascii, %offsets
+  %sextets.reversed = trunc <4 x i8> %sextets.i8 to <4 x i6>
+  %sextets = call
+    <4 x i6> @llvm.vector.reverse.v4i6 (<4 x i6> %sextets.reversed)
+
+  %sextets.bytes.reversed = bitcast <4 x i6> %sextets to <3 x i8>
+  %sextets.bytes = call
+    <3 x i8> @llvm.vector.reverse.v3i8(<3 x i8> %sextets.bytes.reversed)
+
+  store <3 x i8> %sextets.bytes, ptr %buf
+
+  ; invalid chars check
+  %lo.lut = add <16 x i8> zeroinitializer,
+    <i8 21, i8 17, i8 17, i8 17, i8 17, i8 17, i8 17, i8 17,
+      i8 17, i8 17, i8 19, i8 26, i8 27, i8 27, i8 27, i8 26>
+  %fifteens = call <4 x i8> @splat(i8 15)
+  %lo.mask = and <4 x i8> %ascii, %fifteens
+  %lo = call <4 x i8> @swizzle.4i8.16i8(<16 x i8> %lo.lut, <4 x i8> %lo.mask)
+
+  %hi.lut = add <16 x i8> zeroinitializer,
+    <i8 16, i8 16, i8 1, i8 2, i8 4, i8 8, i8 4, i8 8,
+      i8 16, i8 16, i8 16, i8 16, i8 16, i8 16, i8 16, i8 16>
+  %hi.mask = lshr <4 x i8> %ascii, %fours
+  %hi = call <4 x i8> @swizzle.4i8.16i8(<16 x i8> %hi.lut, <4 x i8> %hi.mask)
+
+  %lo.and.hi = and <4 x i8> %lo, %hi
+  %reduce.or = call i8 @llvm.vector.reduce.or.v4i8(<4 x i8> %lo.and.hi)
+  %is.valid = icmp eq i8 %reduce.or, 0
+
+  ret i1 %is.valid
+}
+
 define i64 @unpadded.len(ptr %buf, i64 %size) {
 entry:
-  br label %unpad
+  br label %loop
 
-unpad:
-  %unpadded.len = phi i64 [%size, %entry], [%last.i, %remove.end]
+loop:
+  %unpadded.len = phi i64 [%size, %entry], [%last.i, %unpad]
   %last.i = sub i64 %unpadded.len, 1
   %is.oob = icmp slt i64 %last.i, 0
   br i1 %is.oob, label %end, label %remove.end
@@ -118,6 +82,10 @@ remove.end:
   %is.padding = icmp eq i8 %last.val, 61; int('=') == 61
 
   br i1 %is.padding, label %unpad, label %end
+
+unpad:
+  store i8 65, ptr %last 
+  br label %loop
 
 end:
   ret i64 %unpadded.len
@@ -130,17 +98,25 @@ entry:
   br label %read.stdin
 
 read.stdin:
+  store <4 x i8> <i8 65, i8 65, i8 65, i8 65>, ptr %buf
   %n = call i64 @read(i32 0, ptr %buf, i64 %size)
   %read.end = icmp sle i64 %n, 0
-  br i1 %read.end, label %end, label %write.stdout
+  br i1 %read.end, label %end, label %decode
+
+decode:
+  %non.padded.len = call i64 @unpadded.len(ptr %buf, i64 %n)
+  %is.valid = call i1 @decode(ptr %buf, i64 %non.padded.len)
+  br i1 %is.valid, label %write.stdout, label %err.bad.char
 
 write.stdout:
-  %non.padded.len = call i64 @unpadded.len(ptr %buf, i64 %n)
-  %decoded.len = call i64 @decode(ptr %buf, i64 %non.padded.len)
-
+  %decoded.len = call i64 @decoded.len(i64 %non.padded.len)
   %written = call i64 @write(i32 1, ptr %buf, i64 %decoded.len)
   %write.fail = icmp ne i64 %written, %decoded.len
   br i1 %write.fail, label %write.error, label %read.stdin
+
+err.bad.char:
+  call void @errx(i32 1, ptr @.bad.char.error)
+  unreachable
 
 write.error:
   call void @errx(i32 1, ptr @.write.error)
@@ -154,9 +130,59 @@ end:
   ret i32 0
 }
 
+define <4 x i8> @splat(i8 %value) {
+entry:
+  %s.0 = insertelement <4 x i8> undef, i8 %value, i32 0
+  %s = shufflevector <4 x i8> %s.0, <4 x i8> undef, <4 x i32> zeroinitializer
+  ret <4 x i8> %s
+}
+
+define <4 x i8> @swizzle.4i8.8i8(<8 x i8> %look.up, <4 x i8> %v) {
+entry:
+  %v.0 =  extractelement <4 x i8> %v, i8 0
+  %v.1 =  extractelement <4 x i8> %v, i8 1
+  %v.2 =  extractelement <4 x i8> %v, i8 2
+  %v.3 =  extractelement <4 x i8> %v, i8 3
+
+  %look.up.0 =  extractelement <8 x i8> %look.up, i8 %v.0
+  %look.up.1 =  extractelement <8 x i8> %look.up, i8 %v.1
+  %look.up.2 =  extractelement <8 x i8> %look.up, i8 %v.2
+  %look.up.3 =  extractelement <8 x i8> %look.up, i8 %v.3
+
+  %values.0 = insertelement <4 x i8> undef, i8 %look.up.0, i32 0
+  %values.1 = insertelement <4 x i8> %values.0, i8 %look.up.1, i32 1
+  %values.2 = insertelement <4 x i8> %values.1, i8 %look.up.2, i32 2
+  %values = insertelement <4 x i8> %values.2, i8 %look.up.3, i32 3
+
+  ret <4 x i8> %values
+}
+
+define <4 x i8> @swizzle.4i8.16i8(<16 x i8> %look.up, <4 x i8> %v) {
+entry:
+  %v.0 =  extractelement <4 x i8> %v, i8 0
+  %v.1 =  extractelement <4 x i8> %v, i8 1
+  %v.2 =  extractelement <4 x i8> %v, i8 2
+  %v.3 =  extractelement <4 x i8> %v, i8 3
+
+  %look.up.0 =  extractelement <16 x i8> %look.up, i8 %v.0
+  %look.up.1 =  extractelement <16 x i8> %look.up, i8 %v.1
+  %look.up.2 =  extractelement <16 x i8> %look.up, i8 %v.2
+  %look.up.3 =  extractelement <16 x i8> %look.up, i8 %v.3
+
+  %values.0 = insertelement <4 x i8> undef, i8 %look.up.0, i32 0
+  %values.1 = insertelement <4 x i8> %values.0, i8 %look.up.1, i32 1
+  %values.2 = insertelement <4 x i8> %values.1, i8 %look.up.2, i32 2
+  %values = insertelement <4 x i8> %values.2, i8 %look.up.3, i32 3
+
+  ret <4 x i8> %values
+}
+
 declare i64 @read(i32, ptr, i64)
 declare i64 @write(i32, ptr, i64)
 declare void @errx(i32, ptr, ...)
+declare i32 @printf(ptr, ...)
 
 declare <4 x i6> @llvm.vector.reverse.v4i6 (<4 x i6>)
 declare <3 x i8> @llvm.vector.reverse.v3i8 (<3 x i8>)
+declare <16 x i8> @llvm.vector.reverse.v16i8 (<16 x i8>)
+declare i8 @llvm.vector.reduce.or.v4i8(<4 x i8>)
