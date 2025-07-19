@@ -160,12 +160,25 @@ entry:
   ret <16 x i8> %s
 }
 
-define <16 x i8> @tiled(<8 x i8> %v) {
+define <64 x i8> @tiled(<8 x i8> %v) {
 entry:
-  %tiled = shufflevector <8 x i8> %v, <8 x i8> %v,
-    <16 x i32> <i32 0, i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7,
-      i32 8, i32 9, i32 10, i32 11, i32 12, i32 13, i32 14, i32 15>
-  ret <16 x i8> %tiled
+  %tiles = alloca [8 x <8 x i8>]
+  %size = add i64 0, 64
+  br label %loop
+
+loop:
+  %i = phi i64 [0, %entry], [%i.next, %loop]
+
+  %tiles.i = getelementptr <8 x i8>, ptr %tiles, i64 %i
+  store <8 x i8> %v, ptr %tiles.i
+
+  %i.next = add i64 %i, 1
+  %is.end = icmp eq i64 %i, %size
+  br i1 %is.end, label %end, label %loop
+
+end:
+  %tiled = load <64 x i8>, ptr %tiles
+  ret <64 x i8> %tiled
 }
 
 define <16 x i8> @swizzle.16i8.16i8(<16 x i8> %look.up, <16 x i8> %v) {
@@ -195,5 +208,5 @@ declare void @errx(i32, ptr, ...)
 
 declare <16 x i6> @llvm.vector.reverse.v16i6(<16 x i6>)
 declare <6 x i8> @llvm.vector.reverse.v6i8(<6 x i8>)
-declare <12 x i8> @llvm.vector.reverse.v12i8(<12 x i8>)
 declare i8 @llvm.vector.reduce.or.v16i8(<16 x i8>)
+declare <12 x i8> @llvm.vector.reverse.v12i8(<12 x i8>)
