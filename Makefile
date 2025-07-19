@@ -1,11 +1,12 @@
 CC = clang
+CFLAGS = -O3 -mavx512f -march=native 
 
 BUILD_DIR := build
 
 all: $(patsubst %.ll,$(BUILD_DIR)/%,$(wildcard *.ll))
 
 $(BUILD_DIR)/%: %.ll | $(BUILD_DIR)
-	$(CC) $< -o $@
+	$(CC) $(CFLAGS) $< -o $@
 
 %: $(BUILD_DIR)/%
 

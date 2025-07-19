@@ -18,51 +18,51 @@ entry:
 
 define i1 @decode(ptr %buf, i64 %size) {
 entry:
-  %ascii = load <16 x i8>, ptr %buf
+  %ascii = load <64 x i8>, ptr %buf
 
-  %fours = call <16 x i8> @splat(i8 4)
-  %shifted = lshr <16 x i8> %ascii, %fours
+  %fours = call <64 x i8> @splat(i8 4)
+  %shifted = lshr <64 x i8> %ascii, %fours
 
-  %slashes = call <16 x i8> @splat(i8 47); ord('/') == 47
-  %eq.i1 = icmp eq <16 x i8> %ascii, %slashes
-  %eq = zext <16 x i1> %eq.i1 to <16 x i8>
+  %slashes = call <64 x i8> @splat(i8 47); ord('/') == 47
+  %eq.i1 = icmp eq <64 x i8> %ascii, %slashes
+  %eq = zext <64 x i1> %eq.i1 to <64 x i8>
 
-  %hashes = sub <16 x i8> %shifted, %eq
+  %hashes = sub <64 x i8> %shifted, %eq
 
-  %offsets.look.up = call <16 x i8> @tiled(
+  %offsets.look.up = call <64 x i8> @tiled(
     <8 x i8> <i8 -1, i8 16, i8 19, i8 4, i8 191, i8 191, i8 185, i8 185>
   )
 
-  %offsets =  call <16 x i8> @swizzle.16i8.16i8(<16 x i8> %offsets.look.up,
-    <16 x i8> %hashes)
+  %offsets =  call <64 x i8> @swizzle.64i8.64i8(<64 x i8> %offsets.look.up,
+    <64 x i8> %hashes)
 
-  %sextets.i8 = add <16 x i8> %ascii, %offsets
-  %sextets.reversed = trunc <16 x i8> %sextets.i8 to <16 x i6>
+  %sextets.i8 = add <64 x i8> %ascii, %offsets
+  %sextets.reversed = trunc <64 x i8> %sextets.i8 to <64 x i6>
   %sextets = call
-    <16 x i6> @llvm.vector.reverse.v16i6(<16 x i6> %sextets.reversed)
+    <64 x i6> @llvm.vector.reverse.v64i6(<64 x i6> %sextets.reversed)
 
-  %sextets.bytes.reversed = bitcast <16 x i6> %sextets to <12 x i8>
+  %sextets.bytes.reversed = bitcast <64 x i6> %sextets to <48 x i8>
   %sextets.bytes = call
-    <12 x i8> @llvm.vector.reverse.v12i8(<12 x i8> %sextets.bytes.reversed)
+    <48 x i8> @llvm.vector.reverse.v48i8(<48 x i8> %sextets.bytes.reversed)
 
-  store <12 x i8> %sextets.bytes, ptr %buf
+  store <48 x i8> %sextets.bytes, ptr %buf
 
   ; invalid chars check
   %lo.lut = add <16 x i8> zeroinitializer,
     <i8 21, i8 17, i8 17, i8 17, i8 17, i8 17, i8 17, i8 17,
       i8 17, i8 17, i8 19, i8 26, i8 27, i8 27, i8 27, i8 26>
-  %fifteens = call <16 x i8> @splat(i8 15)
-  %lo.mask = and <16 x i8> %ascii, %fifteens
-  %lo = call <16 x i8> @swizzle.16i8.16i8(<16 x i8> %lo.lut, <16 x i8> %lo.mask)
+  %fifteens = call <64 x i8> @splat(i8 15)
+  %lo.mask = and <64 x i8> %ascii, %fifteens
+  %lo = call <64 x i8> @swizzle.16i8.64i8(<16 x i8> %lo.lut, <64 x i8> %lo.mask)
 
   %hi.lut = add <16 x i8> zeroinitializer,
     <i8 16, i8 16, i8 1, i8 2, i8 4, i8 8, i8 4, i8 8,
       i8 16, i8 16, i8 16, i8 16, i8 16, i8 16, i8 16, i8 16>
-  %hi.mask = lshr <16 x i8> %ascii, %fours
-  %hi = call <16 x i8> @swizzle.16i8.16i8(<16 x i8> %hi.lut, <16 x i8> %hi.mask)
+  %hi.mask = lshr <64 x i8> %ascii, %fours
+  %hi = call <64 x i8> @swizzle.16i8.64i8(<16 x i8> %hi.lut, <64 x i8> %hi.mask)
 
-  %lo.and.hi = and <16 x i8> %lo, %hi
-  %reduce.or = call i8 @llvm.vector.reduce.or.v16i8(<16 x i8> %lo.and.hi)
+  %lo.and.hi = and <64 x i8> %lo, %hi
+  %reduce.or = call i8 @llvm.vector.reduce.or.v64i8(<64 x i8> %lo.and.hi)
   %is.valid = icmp eq i8 %reduce.or, 0
 
   ret i1 %is.valid
@@ -114,13 +114,13 @@ no.change:
 
 define i32 @main() {
 entry:
-  %buf = alloca <16 x i8>
+  %buf = alloca <64 x i8>
   %size = add i64 0, 16
   br label %read.stdin
 
 read.stdin:
-  %as = call <16 x i8> @splat(i8 65)
-  store <16 x i8> %as, ptr %buf
+  %as = call <64 x i8> @splat(i8 65)
+  store <64 x i8> %as, ptr %buf
   %n = call i64 @read(i32 0, ptr %buf, i64 %size)
   %read.end = icmp sle i64 %n, 0
   br i1 %read.end, label %end, label %decode
@@ -153,11 +153,11 @@ end:
   ret i32 0
 }
 
-define <16 x i8> @splat(i8 %value) {
+define <64 x i8> @splat(i8 %value) {
 entry:
-  %s.0 = insertelement <16 x i8> undef, i8 %value, i32 0
-  %s = shufflevector <16 x i8> %s.0, <16 x i8> undef, <16 x i32> zeroinitializer
-  ret <16 x i8> %s
+  %s.0 = insertelement <64 x i8> undef, i8 %value, i32 0
+  %s = shufflevector <64 x i8> %s.0, <64 x i8> undef, <64 x i32> zeroinitializer
+  ret <64 x i8> %s
 }
 
 define <64 x i8> @tiled(<8 x i8> %v) {
@@ -181,32 +181,52 @@ end:
   ret <64 x i8> %tiled
 }
 
-define <16 x i8> @swizzle.16i8.16i8(<16 x i8> %look.up, <16 x i8> %v) {
+define <64 x i8> @swizzle.16i8.64i8(<16 x i8> %look.up, <64 x i8> %v) {
 entry:
   %size = add i64 0, 16
   br label %loop
 
 loop:
   %i = phi i64 [0, %entry], [%i.next, %loop]
-  %values.old = phi <16 x i8> [undef, %entry], [%values, %loop]
+  %values.old = phi <64 x i8> [undef, %entry], [%values, %loop]
 
-  %v.i =  extractelement <16 x i8> %v, i64 %i
+  %v.i =  extractelement <64 x i8> %v, i64 %i
   %look.up.i =  extractelement <16 x i8> %look.up, i8 %v.i
-  %values =  insertelement <16 x i8> %values.old, i8 %look.up.i, i64 %i
+  %values =  insertelement <64 x i8> %values.old, i8 %look.up.i, i64 %i
 
   %i.next = add i64 %i, 1
   %is.end = icmp eq i64 %i, %size
   br i1 %is.end, label %end, label %loop
 
 end:
-  ret <16 x i8> %values
+  ret <64 x i8> %values
+}
+
+define <64 x i8> @swizzle.64i8.64i8(<64 x i8> %look.up, <64 x i8> %v) {
+entry:
+  %size = add i64 0, 16
+  br label %loop
+
+loop:
+  %i = phi i64 [0, %entry], [%i.next, %loop]
+  %values.old = phi <64 x i8> [undef, %entry], [%values, %loop]
+
+  %v.i =  extractelement <64 x i8> %v, i64 %i
+  %look.up.i =  extractelement <64 x i8> %look.up, i8 %v.i
+  %values =  insertelement <64 x i8> %values.old, i8 %look.up.i, i64 %i
+
+  %i.next = add i64 %i, 1
+  %is.end = icmp eq i64 %i, %size
+  br i1 %is.end, label %end, label %loop
+
+end:
+  ret <64 x i8> %values
 }
 
 declare i64 @read(i32, ptr, i64)
 declare i64 @write(i32, ptr, i64)
 declare void @errx(i32, ptr, ...)
 
-declare <16 x i6> @llvm.vector.reverse.v16i6(<16 x i6>)
-declare <6 x i8> @llvm.vector.reverse.v6i8(<6 x i8>)
-declare i8 @llvm.vector.reduce.or.v16i8(<16 x i8>)
-declare <12 x i8> @llvm.vector.reverse.v12i8(<12 x i8>)
+declare <64 x i6> @llvm.vector.reverse.v64i6(<64 x i6>)
+declare i8 @llvm.vector.reduce.or.v64i8(<64 x i8>)
+declare <48 x i8> @llvm.vector.reverse.v48i8(<48 x i8>)
